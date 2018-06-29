@@ -14,14 +14,14 @@ services:
       - CORE_PEER_LOCALMSPID=Store1MSP
       - CORE_PEER_MSPCONFIGPATH=/root/crypto/msp
       - SERVER=peer0.store1.mymarket.com:7051
-      - CHANNELID=mymarketcc
+      - CHANNELID=mymarketchannel
       - FILTERED=false
       - TLS=true
       - CLIENTKEY=/root/crypto/tls/client.key
       - CLIENTCERT=/root/crypto/tls/client.crt
       - ROOTCERT=/root/crypto/tls/ca.crt
     volumes:
-      - /home/badm/mymarket/crypto-config/peerOrganizations/store1.mymarket.com/peers/peer0.store1.mymarket.com/msp:/root/crypto/msp
-      - /home/badm/mymarket/crypto-config/peerOrganizations/store1.mymarket.com/users/Admin@store1.mymarket.com/tls:/root/crypto/tls
+      - /home/ingee.kim/work/learn-hyperledgerFabric/crypto-config/peerOrganizations/store1.mymarket.com/peers/peer0.store1.mymarket.com/msp:/root/crypto/msp
+      - /home/ingee.kim/work/learn-hyperledgerFabric/crypto-config/peerOrganizations/store1.mymarket.com/users/Admin@store1.mymarket.com/tls:/root/crypto/tls
     networks:
       - mymarket

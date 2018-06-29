@@ -28,15 +28,19 @@ var tx_id = null;
 
 
 app.get('/', (req, res) => {
-	console.log(userStore)
+	//console.log(userStore)
+	console.log(store_path)
 	res.send("Hello");
 
-  
+
  });
 
 app.post('/usermanage/user/', (req,res) => {
+	console.log("!\n/usermanage/user/");
+	console.log(req.body);
 	const userId = req.body.userId || '';
 	var userSecret = '';
+	console.log("userId="+userId+", userSecret="+userSecret);
 
 	if(!userId.length){
 		return res.status(400).json({error: 'Incorrenct name'});
@@ -52,14 +56,14 @@ app.post('/usermanage/user/', (req,res) => {
 			{username: userId,
 			mspid : ca_config.mspId,
      cryptoContent: { privateKeyPEM: enrollment.key.toBytes(), signedCertPEM: enrollment.certificate }
-		}); 
+		});
 	}).then((user) => {
 		member_user = user;
 
 		return fabric_client.setUserContext(member_user);
 	}).then(() => {
 		console.log(userId + ' was successfully registered and enrolled and is ready to intreact with the fabric network');
-		
+
 		return res.status(201).json({enrollmentID:userId, enrollmentSecret:userSecret});
 	}).catch((err) => {
     console.error('Failed to register: ' + err);
@@ -84,7 +88,7 @@ app.post('/usermanage/user/enroll', (req,res) => {
 	if(!userSecret.length){
 		return res.status(400).json({error: "Incorrect enrollmentSecret"});
 	}
-	
+
 
 //	fabric_ca_client.enroll({ enrollmentID: userID, enrollmentSecret: userSecret}).then((enrollment) => {
 //		return fabric_client.createUser(
@@ -122,13 +126,17 @@ app.post('/usermanage/user/enroll', (req,res) => {
 });
 
 app.post("/transaction/product", (req,res) => {
-	
+  console.log("\n!\n/transaction/prodcut called");
+
 	var userID = req.body.enrollmentID || '';
   var productName = req.body.productName || '';
   var qty = req.body.qty || '';
+  console.log("userID="+userID+", productName="+productName+", qty="+qty);
+
   var owner = "store1";
   var chaincodeId = ca_config.chaincodeid;
 	var channelName = ca_config.channel_name;
+  console.log("owner="+owner+", chaincodeId="+chaincodeId+", channelName="+channelName);
 
 	fabric_client.getUserContext(userID, true).then((user_from_store) => {
 	  if(user_from_store && user_from_store.isEnrolled()){
@@ -138,7 +146,7 @@ app.post("/transaction/product", (req,res) => {
       console.log("failed to get user");
 			return res.status(400).json("Failed to get user");
     }
-		
+
 		tx_id = fabric_client.newTransactionID();
 		var request = {
 			chaincodeId : chaincodeId,
@@ -147,9 +155,18 @@ app.post("/transaction/product", (req,res) => {
 			chainId: channelName,
 			txId: tx_id
 		};
+		console.log("tx-request="+JSON.stringify(request));
+		console.log("channel="+channel);
 
-		return channel.sendTransactionProposal(request);
+		//return channel.sendTransactionProposal(request);
+		var retVal = channel.sendTransactionProposal(request);
+		console.log("channel.sendTransactionProposal(request) return="+retVal);
+		return retVal;
+
   }).then((results) => {
+    console.log("results="+results);
+    console.log("results.length="+results.length);
+
 		var proposalResponses = results[0];
     var proposal = results[1];
     let isProposalGood = false;
@@ -176,7 +193,7 @@ app.post("/transaction/product", (req,res) => {
       let peerserverCert = fs.readFileSync(path.join(__dirname, '../../crypto-config/peerOrganizations/store1.mymarket.com/peers/peer0.store1.mymarket.com/tls/ca.crt'));
       var sendPromise = channel.sendTransaction(request);
       promises.push(sendPromise);
-			
+
 			let event_hub = fabric_client.newEventHub();
       event_hub.setPeerAddr(ca_config.event_url,{
           'pem': Buffer.from(peerserverCert).toString(),
@@ -232,7 +249,7 @@ app.post("/transaction/product", (req,res) => {
     } else {
             console.log('Transaction failed to be committed to the ledger due to ::'+results[1].event_status);
     }
-		
+
 		if(isSuccess && isValid){
 				return res.status(200).json("Successfully committed the change to the ledger by the peer");
 
@@ -242,6 +259,7 @@ app.post("/transaction/product", (req,res) => {
 
 	}).catch((err) => {
 		console.error('Failed to invoke successfully :: ' + err);
+		res.status(500).json(err);
 	});
 });
 
@@ -249,38 +267,37 @@ app.get('/transaction/product/:id', (req,res) => {
 	var userID = req.params.id;
 
 	fabric_client.getUserContext(userID, true).then((user_from_store) => {
-     if(user_from_store && user_from_store.isEnrolled()){
-       console.log("Successfully loaded user from persistence");
-       member_user = user_from_store;
-     } else {
-       console.log("failed to get user");
-       return res.status(400).json("Failed to get user");
-     }
-		const request = {
-			chaincodeId: ca_config.chaincodeid,
-			fcn: 'getProductList',
-			args: ['']
-		};
+    if(user_from_store && user_from_store.isEnrolled()){
+      console.log("Successfully loaded user from persistence");
+      member_user = user_from_store;
+    } else {
+      console.log("failed to get user");
+      return res.status(400).json("Failed to get user");
+    }
+    const request = {
+      chaincodeId: ca_config.chaincodeid,
+      fcn: 'getProductList',
+      args: ['']
+    };
+    return channel.queryByChaincode(request);
 
+  }).then((query_responses) => {
+    console.log("Query has completed, checking results");
+    // query_responses could have more than one  results if there multiple peers were used as targets
+    if (query_responses && query_responses.length == 1) {
+      if (query_responses[0] instanceof Error) {
+        return res.status(500).json("error from query = ", query_responses[0]);
+      } else {
+        return res.status(200).json(query_responses[0].toString());
+      }
+    } else {
+      return res.status(500).json("No payloads were returned from query");
+    }
+  }).catch((err) => {
+    return res.status(500).json('Failed to query successfully :: ' + err);
+  });
 
-     return channel.queryByChaincode(request);
-   }).then((query_responses) => {
-        console.log("Query has completed, checking results");
-        // query_responses could have more than one  results if there multiple peers were used as targets
-        if (query_responses && query_responses.length == 1) {
-                if (query_responses[0] instanceof Error) {
-			return res.status(500).json("error from query = ", query_responses[0]);
-               } else {
-			return res.status(200).json(query_responses[0].toString());
-                }
-        } else {
-			return res.status(500).json("No payloads were returned from query");
-        }
-   }).catch((err) => {
-			return res.status(500).json('Failed to query successfully :: ' + err);
-   });
-
-}); 
+});
 
 app.listen(3001, () => {
 
@@ -288,15 +305,20 @@ app.listen(3001, () => {
   let peerserverCert = fs.readFileSync(path.join(__dirname, '../../crypto-config/peerOrganizations/store1.mymarket.com/peers/peer0.store1.mymarket.com/tls/ca.crt'));
 
   channel = fabric_client.newChannel(ca_config.channel_name);
+  console.log("channel="+channel);
+
   peer = fabric_client.newPeer(ca_config.peer_url,{
       'pem': Buffer.from(peerserverCert).toString(),
       'ssl-target-name-override': "peer0.store1.mymarket.com",
     });
+  console.log("peer="+peer);
+
   channel.addPeer(peer);
   order = fabric_client.newOrderer(ca_config.orderer_url,{
       'pem': Buffer.from(ordererserverCert).toString(),
       'ssl-target-name-override': "orderer1.mymarket.com",
     });
+  console.log("order="+order);
   channel.addOrderer(order);
 
 Fabric_Client.newDefaultKeyValueStore({ path: store_path
